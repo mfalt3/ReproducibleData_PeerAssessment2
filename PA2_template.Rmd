@@ -1,0 +1,140 @@
+### Title:
+Analysis of the NOAA Storm Database to determine which weather events are most harmful with respect to population health and which weather events have the greatest economic consequences.
+
+
+### Synopsis:
+It is known that storms and other severe weather events can cause both public health and economic problems for both communities and municipalities.  In this document, we have analyzed the impact that specific weather-related events have had on both public health and the economy.  With regards to publich heath, we looked into the impact to fatalities and injuries. With regards to the economy, we looked into the impact to both property damage and crop damage.
+
+With respect to public health, the results are showing that **Tornados** have the greatest impact to amount of both fatalities and injuries.  Both **Excessive Heat** and **Lightening** fell within the top 5 impactful events with respect to these 2 categories.  Excessive Heat was #2 on the Fatality list and #4 on the Injury list while Lightening came in at #5 on both the Fatality and the Injury lists.
+
+With respect to economic problems, the results are showing that **Floods** have the greatest impact to the amount of property damage while **Droughts** have the greatest impact to the amount of crop damage.  While Floods came in at #1 with regards to property damage, it was #2 on the list with regards to crop damage - right behind Droughts (as indicated above).
+
+### Data Processing:
+Load libraries for data processing
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+library(R.utils)
+library(plyr) 
+library(ggplot2) 
+library(grid)
+library(scales)
+```
+
+Download zip file from provided URL.
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+    setwd("C:/Users/mfamda/Desktop/Coursera/ReproducibleResearch/PA2")
+    url<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+    setInternet2(use = TRUE)
+    download.file(url,destfile="StormData.csv.bz2")
+```
+
+Unzip the downloaded file to prep for analysis.
+```{r, echo=TRUE, warning=FALSE, message=FALSE, cache=TRUE}
+    zipfile <- "StormData.csv.bz2"
+    csvfile <- "StormData.csv"
+    bunzip2(zipfile,csvfile,overwrite=TRUE, remove=FALSE)
+    workingfile<-read.csv(csvfile)
+```
+
+Briefly preview the working CSV file for analysis
+```{r, echo=TRUE, warning=FALSE, message=FALSE, cache=TRUE}
+    head(workingfile)
+```
+
+Subsetting the data to make the csv file more manageable. Inluding columns related to the purpose of this analysis.
+Looking at data related to the health and economic impact.
+```{r, echo=TRUE, warning=FALSE, message=FALSE, cache=TRUE}
+ColSubset <- c("EVTYPE", "PROPDMG", "PROPDMGEXP", "CROPDMG","CROPDMGEXP", "FATALITIES", "INJURIES")
+analysisData <- workingfile[ColSubset]
+head(analysisData)
+```
+
+Preparing the crop damage exponential data for further analysis as it needs to be multiplied with another variable
+```{r, echo=TRUE, warning=FALSE, message=FALSE, cache=TRUE}
+analysisData$CROPEXP[analysisData$CROPDMGEXP == "k"] <- 1000
+analysisData$CROPEXP[analysisData$CROPDMGEXP == "K"] <- 1000
+analysisData$CROPEXP[analysisData$CROPDMGEXP == "m"] <- 1e+06
+analysisData$CROPEXP[analysisData$CROPDMGEXP == "M"] <- 1e+06
+analysisData$CROPEXP[analysisData$CROPDMGEXP == "B"] <- 1e+09
+analysisData$CROPEXP[analysisData$CROPDMGEXP == "2"] <- 100
+analysisData$CROPEXP[analysisData$CROPDMGEXP == "0"] <- 1
+analysisData$CROPEXP[analysisData$CROPDMGEXP == ""] <- 1
+analysisData$CROPEXP[analysisData$CROPDMGEXP == "?"] <- 0
+```
+
+Assigning the crop damage values based on the above exponential factors
+```{r, echo=TRUE, warning=FALSE, message=FALSE, cache=TRUE}
+analysisData$cropDMG_Amt <- analysisData$CROPDMG * analysisData$CROPEXP
+```
+
+Preparing the property damage exponential data for further analysis as it needs to be multiplied with another variable
+```{r, echo=TRUE, warning=FALSE, message=FALSE, cache=TRUE}
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "K"] <- 1000
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "M"] <- 1e+06
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "m"] <- 1e+06
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "H"] <- 100
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "h"] <- 100
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "B"] <- 1e+09
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "8"] <- 1e+08
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "7"] <- 1e+07
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "6"] <- 1e+06
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "5"] <- 1e+05
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "4"] <- 10000
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "3"] <- 1000
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "2"] <- 100
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "1"] <- 10
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "0"] <- 1
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "+"] <- 0
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "-"] <- 0
+analysisData$PROPEXP[analysisData$PROPDMGEXP == "?"] <- 0
+analysisData$PROPEXP[analysisData$PROPDMGEXP == ""] <- 1
+```
+
+Assigning the property damage values based on the above exponential factors
+```{r, echo=TRUE, warning=FALSE, message=FALSE, cache=TRUE}
+analysisData$propDMG_Amt <- analysisData$PROPDMG * analysisData$PROPEXP
+```
+
+Aggregate property damage and health impact data
+(**Amt of Fatalities**, **Amt Injuries**, **Amt of Property Damage**, and **Amt of Crop Damage**)
+```{r, echo=TRUE, warning=FALSE, message=FALSE, cache=TRUE}
+agg_fatalities <- aggregate(FATALITIES ~ EVTYPE, data = analysisData, FUN = sum)
+agg_injuries <- aggregate(INJURIES ~ EVTYPE, data = analysisData, FUN = sum)
+agg_propDamage <- aggregate(propDMG_Amt ~ EVTYPE, data = analysisData, FUN = sum)
+agg_cropDamage <- aggregate(cropDMG_Amt ~ EVTYPE, data = analysisData, FUN = sum)
+```
+
+Preparing the data for plots by sorting for top5 (descending) in each of the categories.
+```{r, echo=TRUE, warning=FALSE, message=FALSE, cache=TRUE}
+fatalities_Top5 <- agg_fatalities[order(-agg_fatalities$FATALITIES), ][1:5, ]
+injuries_Top5 <- agg_injuries[order(-agg_injuries$INJURIES), ][1:5, ]
+propDamage_Top5 <- agg_propDamage[order(-agg_propDamage$propDMG_Amt),][1:5, ]
+cropDamage_Top5 <- agg_cropDamage[order(-agg_cropDamage$cropDMG_Amt),][1:5, ]
+```
+
+
+
+### Results:
+
+Display plots to analyze fatalities and injuries related to weather related event types.
+
+#### Figure 1
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+par(mar=c(8, 4, 5, 2) + 0.1)
+barplot(fatalities_Top5$FATALITIES, las=3, col="red", names.arg = fatalities_Top5$EVTYPE, main = "Top 5 Fatality Events" , ylab = "# Fatalities")
+```
+
+#### Figure 2
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+par(mar=c(8, 4, 5, 2) + 0.1)
+barplot(injuries_Top5$INJURIES, las=3, col="yellow", names.arg = injuries_Top5$EVTYPE, main = "Top 5 Injury Events" , ylab = "# Injuries")
+```
+
+
+Display plots to analyze property damage and crop damage related to weather related event types.
+
+#### Figure 3
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+par(mfrow=c(1,2), mar=c(12, 4, 5, 2) + 0.1)
+barplot(propDamage_Top5$propDMG_Amt, las=3, col="darkblue", names.arg = propDamage_Top5$EVTYPE, main = "Top 5 Property Damage Events" , ylab = "Amt of Property Damage")
+barplot(cropDamage_Top5$cropDMG_Amt, las=3, col="brown", names.arg = cropDamage_Top5$EVTYPE, main = "Top 5 Crop Damage Events" , ylab = "Amt of Crop Damage")
+```
